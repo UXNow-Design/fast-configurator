@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schranksystem Konfigurator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            background: #fff;
+            overflow: hidden;
+        }
+        .color-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .color-swatch.active {
+            transform: scale(1.1);
+            box-shadow: 0 0 0 2px white, 0 0 0 4px #0058a3;
+        }
+        .dimension-label {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .module-card {
+            transition: all 0.2s;
+            border: 1px solid #e5e7eb;
+        }
+        .module-card:hover {
+            border-color: #0058a3;
+        }
+        .room-size-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        .room-size-modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .settings-panel {
+            height: calc(100vh - 64px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+        .settings-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        .settings-panel::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .settings-panel::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        .settings-panel::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 h-16 flex-shrink-0">
+        <div class="h-full px-4 flex justify-between items-center">
+            <button class="text-gray-600 hover:text-gray-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+            </button>
+            <div class="text-right">
+                <span class="text-2xl font-bold">€ <span id="totalPrice">0</span></span>
+                <button class="ml-4 bg-[#0058a3] text-white px-6 py-2 rounded hover:bg-[#004f93] transition-colors">
+                    Weiter
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex">
+        <!-- 3D Preview -->
+        <div class="flex-1 bg-[#f5f5f5] relative">
+            <div id="preview" class="w-full h-full"></div>
+            
+            <!-- Toolbar -->
+            <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4">
+                <button id="roomSizeBtn" class="bg-black text-white px-6 py-3 rounded-full hover:bg-gray-800 transition-colors flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                    </svg>
+                    Raumgröße ändern
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="w-96 bg-white border-l border-gray-200 settings-panel p-6">
+            <div class="space-y-8">
+                <!-- Module Selection -->
+                <div>
+                    <h2 class="text-lg font-semibold mb-4">Module</h2>
+                    <div class="space-y-4">
+                        <div class="module-card bg-white p-4 rounded cursor-pointer" data-type="hanging">
+                            <img src="haengeschrank.png" alt="Hängeschrank" class="w-full mb-3 rounded">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-medium">Hängeschrank</h3>
+                                    <p class="text-sm text-gray-600">60x40x38 cm</p>
+                                </div>
+                                <span class="font-semibold">€ 299</span>
+                            </div>
+                        </div>
+
+                        <div class="module-card bg-white p-4 rounded cursor-pointer" data-type="base">
+                            <img src="Unterschrank.png" alt="Unterschrank" class="w-full mb-3 rounded">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-medium">Unterschrank</h3>
+                                    <p class="text-sm text-gray-600">60x60x38 cm</p>
+                                </div>
+                                <span class="font-semibold">€ 399</span>
+                            </div>
+                        </div>
+
+                        <div class="module-card bg-white p-4 rounded cursor-pointer" data-type="tall">
+                            <img src="hochschrank.png" alt="Hochschrank" class="w-full mb-3 rounded">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-medium">Hochschrank</h3>
+                                    <p class="text-sm text-gray-600">60x200x38 cm</p>
+                                </div>
+                                <span class="font-semibold">€ 599</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Material Selection -->
+                <div>
+                    <h2 class="text-lg font-semibold mb-4">Material & Farbe</h2>
+                    <div class="grid grid-cols-4 gap-3">
+                        <button class="color-swatch active bg-white border border-gray-200" data-color="white"></button>
+                        <button class="color-swatch bg-[#b0845f]" data-color="oak"></button>
+                        <button class="color-swatch bg-[#4a4a4a]" data-color="gray"></button>
+                        <button class="color-swatch bg-black" data-color="black"></button>
+                        <button class="color-swatch bg-[#d4bc94]" data-color="birch"></button>
+                        <button class="color-swatch bg-[#8b4513]" data-color="walnut"></button>
+                        <button class="color-swatch bg-[#dcdcdc]" data-color="concrete"></button>
+                        <button class="color-swatch bg-gradient-to-r from-white to-gray-200" data-color="glass"></button>
+                    </div>
+                </div>
+
+                <!-- Handle Selection -->
+                <div>
+                    <h2 class="text-lg font-semibold mb-4">Griffe</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-handle="modern">
+                            <div class="w-full h-1 bg-gray-300 mb-2"></div>
+                            <span class="text-sm">Modern</span>
+                        </button>
+                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-handle="minimal">
+                            <div class="w-full h-4 border-b-2 border-gray-300 mb-2"></div>
+                            <span class="text-sm">Minimal</span>
+                        </button>
+                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-handle="classic">
+                            <div class="w-full h-4 flex items-center justify-center">
+                                <div class="w-8 h-2 bg-gray-300 rounded-full"></div>
+                            </div>
+                            <span class="text-sm">Classic</span>
+                        </button>
+                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-handle="touch">
+                            <div class="w-full h-4 flex items-center justify-center text-gray-400">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"/>
+                </svg>
+                            </div>
+                            <span class="text-sm">Touch</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Feet Selection -->
+                <div>
+                    <h2 class="text-lg font-semibold mb-4">Füße</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-feet="standard">
+                            <div class="w-full h-8 flex items-end justify-center">
+                                <div class="w-2 h-4 bg-gray-300"></div>
+                            </div>
+                            <span class="text-sm mt-2 block">Standard</span>
+                        </button>
+                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-feet="metal">
+                            <div class="w-full h-8 flex items-end justify-center">
+                                <div class="w-2 h-6 bg-gray-400"></div>
+                            </div>
+                            <span class="text-sm mt-2 block">Metall</span>
+                        </button>
+                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-feet="wood">
+                            <div class="w-full h-8 flex items-end justify-center">
+                                <div class="w-2 h-5 bg-[#b0845f]"></div>
+                            </div>
+                            <span class="text-sm mt-2 block">Holz</span>
+                        </button>
+                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-feet="none">
+                            <div class="w-full h-8 flex items-end justify-center">
+                                <div class="w-full h-1 bg-gray-200"></div>
+                            </div>
+                            <span class="text-sm mt-2 block">Ohne</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Accessories -->
+                <div>
+                    <h2 class="text-lg font-semibold mb-4">Zubehör</h2>
+                    <div class="space-y-3">
+                        <label class="flex items-center gap-3">
+                            <input type="checkbox" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
+                            <span>LED-Beleuchtung (+€49)</span>
+                        </label>
+                        <label class="flex items-center gap-3">
+                            <input type="checkbox" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
+                            <span>Soft-Close (+€29)</span>
+                        </label>
+                        <label class="flex items-center gap-3">
+                            <input type="checkbox" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
+                            <span>Glasböden (+€39)</span>
+                        </label>
+                        <label class="flex items-center gap-3">
+                            <input type="checkbox" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
+                            <span>Innenschubladen (+€79)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Size Modal -->
+    <div id="roomSizeModal" class="room-size-modal">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 class="text-lg font-semibold mb-4">Raumgröße anpassen</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Raumbreite (m)</label>
+                    <input type="number" id="roomWidth" value="4" min="2" max="10" step="0.5" 
+                        class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Raumtiefe (m)</label>
+                    <input type="number" id="roomDepth" value="4" min="2" max="10" step="0.5" 
+                        class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Raumhöhe (m)</label>
+                    <input type="number" id="roomHeight" value="2.4" min="2" max="4" step="0.1" 
+                        class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="cancelRoomSize" class="px-4 py-2 text-gray-700 hover:text-gray-900">
+                    Abbrechen
+                </button>
+                <button id="applyRoomSize" class="px-4 py-2 bg-[#0058a3] text-white rounded hover:bg-[#004f93]">
+                    Übernehmen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
