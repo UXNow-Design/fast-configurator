@@ -73,20 +73,70 @@
         .settings-panel::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        
+        /* Mobile Tab Styles */
+        .mobile-tab {
+            border-bottom: 2px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .mobile-tab.active {
+            color: #0058a3; /* Match IKEA blue */
+            border-bottom-color: #0058a3;
+        }
+        .mobile-tab i {
+            font-size: 1rem; /* Adjust icon size */
+        }
+        
+        /* Style for options grid inside mobile bar */
+        #mobileOptionsContainer .grid {
+             display: flex; /* Use flex for horizontal layout */
+             overflow-x: auto; /* Enable horizontal scroll */
+             padding-bottom: 0.5rem; /* Space for scrollbar */
+             gap: 0.75rem; /* Adjust gap */
+        }
+        #mobileOptionsContainer .grid > * {
+            flex-shrink: 0; /* Prevent items from shrinking */
+        }
+        
+        /* Adjust color swatch size for mobile */
+        #mobileOptionsContainer .color-swatch {
+             width: 40px;
+             height: 40px;
+        }
+         /* Adjust handle/feet preview size for mobile */
+        #mobileOptionsContainer [data-handle],
+        #mobileOptionsContainer [data-feet] {
+             min-width: 80px; /* Ensure enough space */
+             padding: 0.5rem;
+        }
+        #mobileOptionsContainer [data-handle] > div,
+        #mobileOptionsContainer [data-feet] > div {
+             height: 2rem; /* Adjust preview height */
+        }
+        #mobileOptionsContainer .accessory-selection-list label {
+            display: block; /* Ensure labels stack nicely */
+        }
+        
+        /* Allow options container to grow */
+        #mobileOptionsContainer {
+             flex-grow: 1;
+             /* min-height can be added if needed, but rely on parent height */
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col">
     <!-- Header -->
-    <header class="bg-white border-b border-gray-200 h-16 flex-shrink-0">
+    <header class="bg-white border-b border-gray-200 h-16 flex-shrink-0 z-20 relative">
         <div class="h-full px-4 flex justify-between items-center">
             <button class="text-gray-600 hover:text-gray-800">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                 </svg>
             </button>
-            <div class="text-right">
-                <span class="text-2xl font-bold">€ <span id="totalPrice">0</span></span>
-                <button class="ml-4 bg-[#0058a3] text-white px-6 py-2 rounded hover:bg-[#004f93] transition-colors">
+            <div class="text-right flex items-center">
+                <span class="text-lg lg:text-2xl font-bold mr-4">€ <span id="totalPrice">0</span></span>
+                <!-- Weiter Button (Desktop) -->
+                <button class="hidden lg:inline-block ml-4 bg-[#0058a3] text-white px-6 py-2 rounded hover:bg-[#004f93] transition-colors">
                     Weiter
                 </button>
             </div>
@@ -94,29 +144,35 @@
     </header>
 
     <!-- Main Content -->
-    <div class="flex-1 flex">
+    <div class="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
         <!-- 3D Preview -->
-        <div class="flex-1 bg-[#f5f5f5] relative">
+        <div class="flex-1 bg-[#f5f5f5] relative lg:pb-0">
             <div id="preview" class="w-full h-full"></div>
             
             <!-- Toolbar -->
-            <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4">
-                <button id="roomSizeBtn" class="bg-black text-white px-6 py-3 rounded-full hover:bg-gray-800 transition-colors flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        </div>
+
+        <!-- Settings Panel (Sidebar on Desktop) -->
+        <div id="settingsPanelDesktop" class="hidden lg:block w-96 bg-white border-l border-gray-200 settings-panel p-6 lg:h-auto lg:max-h-screen overflow-y-auto">
+            
+            <!-- Toolbar Buttons (Desktop) -->
+            <div class="hidden lg:flex gap-4 mb-6 border-b pb-4">
+                 <button id="roomSizeBtnDesktop" class="bg-gray-100 text-gray-800 px-4 py-2 rounded hover:bg-gray-200 transition-colors flex items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
                     </svg>
                     Raumgröße ändern
                 </button>
+                <!-- Add other desktop toolbar buttons here if needed -->
             </div>
-        </div>
-
-        <!-- Settings Panel -->
-        <div class="w-96 bg-white border-l border-gray-200 settings-panel p-6">
-            <div class="space-y-8">
+            
+            <!-- Scrollable content area -->
+            <div id="desktopSettingsContent" class="space-y-8 pb-16 lg:pb-6">
                 <!-- Module Selection -->
-                <div>
+                <div data-setting="modules">
                     <h2 class="text-lg font-semibold mb-4">Module</h2>
-                    <div class="space-y-4">
+                    <div class="space-y-4 module-selection-grid">
+                         <!-- Original Module Cards restored -->
                         <div class="module-card bg-white p-4 rounded cursor-pointer" data-type="hanging">
                             <img src="haengeschrank.png" alt="Hängeschrank" class="w-full mb-3 rounded">
                             <div class="flex justify-between items-start">
@@ -127,7 +183,6 @@
                                 <span class="font-semibold">€ 299</span>
                             </div>
                         </div>
-
                         <div class="module-card bg-white p-4 rounded cursor-pointer" data-type="base">
                             <img src="Unterschrank.png" alt="Unterschrank" class="w-full mb-3 rounded">
                             <div class="flex justify-between items-start">
@@ -138,7 +193,6 @@
                                 <span class="font-semibold">€ 399</span>
                             </div>
                         </div>
-
                         <div class="module-card bg-white p-4 rounded cursor-pointer" data-type="tall">
                             <img src="hochschrank.png" alt="Hochschrank" class="w-full mb-3 rounded">
                             <div class="flex justify-between items-start">
@@ -153,9 +207,10 @@
                 </div>
 
                 <!-- Material Selection -->
-                <div>
+                <div data-setting="material">
                     <h2 class="text-lg font-semibold mb-4">Material & Farbe</h2>
-                    <div class="grid grid-cols-4 gap-3">
+                    <div class="grid grid-cols-4 gap-3 material-selection-grid">
+                        <!-- Original Color Swatches restored -->
                         <button class="color-swatch active bg-white border border-gray-200" data-color="white"></button>
                         <button class="color-swatch bg-[#b0845f]" data-color="oak"></button>
                         <button class="color-swatch bg-[#4a4a4a]" data-color="gray"></button>
@@ -168,10 +223,11 @@
                 </div>
 
                 <!-- Handle Selection -->
-                <div>
+                <div data-setting="handles">
                     <h2 class="text-lg font-semibold mb-4">Griffe</h2>
-                    <div class="grid grid-cols-2 gap-4">
-                        <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-handle="modern">
+                    <div class="grid grid-cols-2 gap-4 handle-selection-grid">
+                        <!-- Original Handle buttons restored -->
+                         <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-handle="modern">
                             <div class="w-full h-1 bg-gray-300 mb-2"></div>
                             <span class="text-sm">Modern</span>
                         </button>
@@ -188,8 +244,8 @@
                         <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-handle="touch">
                             <div class="w-full h-4 flex items-center justify-center text-gray-400">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"/>
-                </svg>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11"/>
+                                </svg>
                             </div>
                             <span class="text-sm">Touch</span>
                         </button>
@@ -197,9 +253,10 @@
                 </div>
 
                 <!-- Feet Selection -->
-                <div>
+                <div data-setting="feet">
                     <h2 class="text-lg font-semibold mb-4">Füße</h2>
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 gap-4 feet-selection-grid">
+                       <!-- Original Feet buttons restored -->
                         <button class="p-4 border rounded-lg hover:border-[#0058a3] transition-colors" data-feet="standard">
                             <div class="w-full h-8 flex items-end justify-center">
                                 <div class="w-2 h-4 bg-gray-300"></div>
@@ -228,27 +285,49 @@
                 </div>
 
                 <!-- Accessories -->
-                <div>
+                <div data-setting="accessories">
                     <h2 class="text-lg font-semibold mb-4">Zubehör</h2>
-                    <div class="space-y-3">
-                        <label class="flex items-center gap-3">
-                            <input type="checkbox" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
-                            <span>LED-Beleuchtung (+€49)</span>
-                        </label>
-                        <label class="flex items-center gap-3">
-                            <input type="checkbox" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
-                            <span>Soft-Close (+€29)</span>
-                        </label>
-                        <label class="flex items-center gap-3">
-                            <input type="checkbox" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
-                            <span>Glasböden (+€39)</span>
-                        </label>
-                        <label class="flex items-center gap-3">
-                            <input type="checkbox" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
-                            <span>Innenschubladen (+€79)</span>
-                        </label>
+                    <div class="space-y-3 accessory-selection-list">
+                       <!-- Original Accessory checkboxes restored -->
+                       <label class="flex items-center gap-3">
+                           <input type="checkbox" name="led" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
+                           <span>LED-Beleuchtung (+€49)</span>
+                       </label>
+                       <label class="flex items-center gap-3">
+                           <input type="checkbox" name="softClose" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
+                           <span>Soft-Close (+€29)</span>
+                       </label>
+                       <label class="flex items-center gap-3">
+                           <input type="checkbox" name="glassShelf" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
+                           <span>Glasböden (+€39)</span>
+                       </label>
+                       <label class="flex items-center gap-3">
+                           <input type="checkbox" name="innerDrawer" class="w-5 h-5 rounded border-gray-300 text-[#0058a3] focus:ring-[#0058a3]">
+                           <span>Innenschubladen (+€79)</span>
+                       </label>
                     </div>
                 </div>
+            </div>
+        </div>
+        
+        <!-- Mobile Control Bar -->
+        <div id="mobileControlsBar" class="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[-2px_0_10px_rgba(0,0,0,0.1)] z-40 transition-all duration-300 ease-in-out flex flex-col h-48">
+            <!-- Draggable Handle -->
+            <div id="mobileControlHandle" class="w-full h-5 pt-2 flex justify-center cursor-grab touch-none lg:hidden flex-shrink-0">
+                <div class="w-10 h-1 bg-gray-300 rounded-full"></div>
+            </div>
+            <!-- Tabs -->
+            <div id="mobileTabsContainer" class="flex justify-around items-center border-b border-gray-200 px-2 pt-1 flex-shrink-0">
+                <button data-controls="modules" class="mobile-tab active py-2 px-1 text-center text-xs text-gray-700 hover:text-blue-600"><i class="fas fa-puzzle-piece mb-1 block mx-auto"></i> Module</button>
+                <button data-controls="material" class="mobile-tab py-2 px-1 text-center text-xs text-gray-700 hover:text-blue-600"><i class="fas fa-palette mb-1 block mx-auto"></i> Material</button>
+                <button data-controls="handles" class="mobile-tab py-2 px-1 text-center text-xs text-gray-700 hover:text-blue-600"><i class="fas fa-grip-lines mb-1 block mx-auto"></i> Griffe</button>
+                <button data-controls="feet" class="mobile-tab py-2 px-1 text-center text-xs text-gray-700 hover:text-blue-600"><i class="fas fa-shoe-prints mb-1 block mx-auto"></i> Füße</button>
+                <button data-controls="accessories" class="mobile-tab py-2 px-1 text-center text-xs text-gray-700 hover:text-blue-600"><i class="fas fa-plus-circle mb-1 block mx-auto"></i> Zubehör</button>
+                <button data-controls="room" class="mobile-tab py-2 px-1 text-center text-xs text-gray-700 hover:text-blue-600"><i class="fas fa-ruler-combined mb-1 block mx-auto"></i> Raum</button>
+            </div>
+            <!-- Options Container -->
+            <div id="mobileOptionsContainer" class="p-4 overflow-y-auto">
+                <!-- Content will be injected here by JS -->
             </div>
         </div>
     </div>

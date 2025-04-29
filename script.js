@@ -186,6 +186,41 @@ function createRoom() {
     controls.update();
 }
 
+// --- START: Responsive Bottom Sheet Logic ---
+let isSettingsPanelOpen = false;
+const settingsPanel = document.getElementById('settingsPanel');
+const settingsToggleBtn = document.getElementById('settingsToggleBtnFab');
+const settingsHandle = document.getElementById('settingsHandle'); // Handle zum Greifen
+
+function toggleSettingsPanel(forceOpen = null) {
+    const shouldOpen = forceOpen !== null ? forceOpen : !isSettingsPanelOpen;
+    if (shouldOpen) {
+        settingsPanel.classList.remove('max-h-0', 'translate-y-full');
+        settingsPanel.classList.add('max-h-[60vh]'); // Höhe beim Öffnen
+        isSettingsPanelOpen = true;
+    } else {
+        settingsPanel.classList.add('max-h-0'); // Höhe beim Schließen
+        settingsPanel.classList.remove('max-h-[60vh]');
+        // Wait for transition before adding translate-y-full to avoid jump
+        setTimeout(() => {
+             if (!isSettingsPanelOpen) { // Check again in case it was reopened quickly
+                 settingsPanel.classList.add('translate-y-full');
+             }
+        }, 300); // Match transition duration
+        isSettingsPanelOpen = false;
+    }
+}
+
+if (settingsToggleBtn) {
+    settingsToggleBtn.addEventListener('click', () => toggleSettingsPanel());
+}
+
+// Optional: Close sheet with handle click/drag (simple toggle for now)
+if (settingsHandle) {
+    settingsHandle.addEventListener('click', () => toggleSettingsPanel(false));
+}
+// --- END: Responsive Bottom Sheet Logic ---
+
 // Schrankmodul erstellen
 function createCabinetModule(type, width, height, depth) {
     const material = getMaterial(currentMaterial);
@@ -544,103 +579,323 @@ function animate() {
     labelRenderer.render(scene, camera);
 }
 
+// --- START: Mobile Controls Bar Logic ---
+const mobileControlsBar = document.getElementById('mobileControlsBar');
+const mobileOptionsContainer = document.getElementById('mobileOptionsContainer');
+const desktopSettingsContent = document.getElementById('desktopSettingsContent');
+const mobileTabs = document.querySelectorAll('.mobile-tab');
+const mobileControlHandle = document.getElementById('mobileControlHandle'); 
+const mobileTabsContainer = document.getElementById('mobileTabsContainer');
+const previewContainer = document.getElementById('preview').parentElement; 
+const headerElement = document.querySelector('header'); // Get header element
+
+function setupMobileControls() {
+    if (!mobileControlsBar || !desktopSettingsContent || !mobileControlHandle || !mobileTabsContainer || !previewContainer || !headerElement) return;
+
+    // Store original desktop elements for cloning
+    const originalSettingElements = {};
+    desktopSettingsContent.querySelectorAll('[data-setting]').forEach(el => {
+        originalSettingElements[el.dataset.setting] = el.innerHTML; // Store inner HTML
+    });
+
+    // Function to show options for a category
+    function showMobileOptions(category) {
+        mobileOptionsContainer.innerHTML = ''; // Clear previous options
+        
+        if (category === 'room') {
+             openRoomSizeModal(); 
+             return;
+        }
+
+        if (originalSettingElements[category]) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = originalSettingElements[category];
+            const controlsElement = tempDiv.querySelector('.module-selection-grid, .material-selection-grid, .handle-selection-grid, .feet-selection-grid, .accessory-selection-list');
+            
+            if (controlsElement) {
+                mobileOptionsContainer.appendChild(controlsElement.cloneNode(true));
+                attachMobileOptionListeners(mobileOptionsContainer);
+            }
+        } else {
+            mobileOptionsContainer.innerHTML = '<p class="text-gray-500 text-sm">Optionen nicht verfügbar.</p>';
+        }
+    }
+
+    mobileTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            mobileTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const category = tab.dataset.controls;
+            showMobileOptions(category);
+        });
+    });
+
+    showMobileOptions('modules');
+    
+    // --- START: Drag to Resize Logic ---
+    let isDragging = false;
+    let startY, initialHeight, headerHeight;
+    const minHeight = 80; 
+    
+    function getFixedElementsHeight() {
+        let handleHeight = mobileControlHandle ? mobileControlHandle.offsetHeight : 0;
+        let tabsHeight = mobileTabsContainer ? mobileTabsContainer.offsetHeight : 0;
+        // Add a small buffer for padding/margins if needed
+        return handleHeight + tabsHeight + 8; // e.g., 8px buffer
+    }
+
+    function onDragStart(e) {
+        isDragging = true;
+        startY = e.clientY || e.touches[0].clientY;
+        initialHeight = mobileControlsBar.offsetHeight;
+        headerHeight = headerElement.offsetHeight; // Get header height on drag start
+        
+        mobileControlsBar.classList.add('!duration-0'); 
+        previewContainer.classList.add('!duration-0'); // Also disable transition for preview container height
+        mobileOptionsContainer.classList.add('!duration-0');
+        document.body.style.userSelect = 'none'; 
+        document.body.style.cursor = 'grabbing';
+        
+        window.addEventListener('mousemove', onDragMove);
+        window.addEventListener('mouseup', onDragEnd);
+        window.addEventListener('touchmove', onDragMove, { passive: false });
+        window.addEventListener('touchend', onDragEnd);
+    }
+
+    function onDragMove(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+
+        const currentY = e.clientY || e.touches[0].clientY;
+        const deltaY = startY - currentY;
+        let newHeight = initialHeight + deltaY;
+        const maxHeight = window.innerHeight * 0.75; 
+
+        newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+
+        mobileControlsBar.style.height = `${newHeight}px`;
+        
+        // Calculate and set preview container height explicitly
+        const previewHeight = window.innerHeight - headerHeight - newHeight;
+        previewContainer.style.height = `${Math.max(0, previewHeight)}px`; // Ensure non-negative
+        
+        const fixedElementsHeight = getFixedElementsHeight();
+        const optionsHeight = newHeight - fixedElementsHeight;
+        if (mobileOptionsContainer) {
+            mobileOptionsContainer.style.height = `${Math.max(0, optionsHeight)}px`;
+        }
+        
+        onWindowResize(); // Update 3D viewport
+    }
+
+    function onDragEnd() {
+        if (!isDragging) return; 
+        isDragging = false;
+        mobileControlsBar.classList.remove('!duration-0'); 
+        previewContainer.classList.remove('!duration-0'); // Re-enable transition for preview container
+        mobileOptionsContainer.classList.remove('!duration-0');
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        
+        window.removeEventListener('mousemove', onDragMove);
+        window.removeEventListener('mouseup', onDragEnd);
+        window.removeEventListener('touchmove', onDragMove);
+        window.removeEventListener('touchend', onDragEnd);
+    }
+
+    if (mobileControlHandle) {
+        mobileControlHandle.addEventListener('mousedown', onDragStart);
+        mobileControlHandle.addEventListener('touchstart', onDragStart, { passive: true });
+    }
+    // --- END: Drag to Resize Logic ---
+    
+    // Set initial heights after elements are rendered
+    requestAnimationFrame(() => { 
+        const initialBarHeight = mobileControlsBar.offsetHeight;
+        const initialHeaderHeight = headerElement.offsetHeight;
+        // Set initial preview height
+        const initialPreviewHeight = window.innerHeight - initialHeaderHeight - initialBarHeight;
+        previewContainer.style.height = `${Math.max(0, initialPreviewHeight)}px`;
+        
+        // Set initial options container height
+        const initialFixedElementsHeight = getFixedElementsHeight();
+        if (mobileOptionsContainer) { 
+             mobileOptionsContainer.style.height = `${Math.max(0, initialBarHeight - initialFixedElementsHeight)}px`;
+        }
+        // Trigger initial resize for Three.js
+        onWindowResize(); 
+    });
+}
+
+// Function to re-attach listeners to dynamically added mobile options
+function attachMobileOptionListeners(container) {
+    // Color Swatches
+    container.querySelectorAll('.color-swatch').forEach(button => {
+        // Prevent duplicate listeners if cloning preserves them
+        if (button.dataset.listenerAttached) return;
+        button.dataset.listenerAttached = true;
+        button.addEventListener('click', handleColorSelection);
+    });
+    // Module Cards
+    container.querySelectorAll('.module-card').forEach(card => {
+         if (card.dataset.listenerAttached) return;
+         card.dataset.listenerAttached = true;
+        card.addEventListener('click', handleModuleSelection);
+    });
+     // Handles
+    container.querySelectorAll('[data-handle]').forEach(button => {
+        if (button.dataset.listenerAttached) return;
+        button.dataset.listenerAttached = true;
+        button.addEventListener('click', handleHandleSelection);
+    });
+    // Feet
+    container.querySelectorAll('[data-feet]').forEach(button => {
+        if (button.dataset.listenerAttached) return;
+        button.dataset.listenerAttached = true;
+        button.addEventListener('click', handleFeetSelection);
+    });
+    // Accessories
+    container.querySelectorAll('.accessory-selection-list input[type="checkbox"]').forEach((checkbox) => {
+         if (checkbox.dataset.listenerAttached) return;
+         checkbox.dataset.listenerAttached = true;
+        checkbox.addEventListener('change', handleAccessorySelection);
+    });
+}
+
+// --- END: Mobile Controls Bar Logic ---
+
+// --- START: Event Handlers for Options (used by both Desktop and Mobile) ---
+function handleColorSelection(event) {
+    const button = event.currentTarget;
+    // Update active state for the specific container (desktop or mobile)
+    const container = button.closest('.material-selection-grid');
+    container.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
+    button.classList.add('active');
+    currentMaterial = button.dataset.color;
+    updateCabinetSystem();
+}
+
+function handleModuleSelection(event) {
+    const card = event.currentTarget;
+    const moduleType = card.dataset.type;
+    modules.push({ type: moduleType });
+    updateCabinetSystem();
+}
+
+function handleHandleSelection(event) {
+     const button = event.currentTarget;
+     const container = button.closest('.handle-selection-grid');
+    container.querySelectorAll('[data-handle]').forEach(b => b.classList.remove('border-[#0058a3]'));
+    button.classList.add('border-[#0058a3]');
+    currentHandle = button.dataset.handle;
+    updateCabinetSystem();
+}
+
+function handleFeetSelection(event) {
+    const button = event.currentTarget;
+    const container = button.closest('.feet-selection-grid');
+    container.querySelectorAll('[data-feet]').forEach(b => b.classList.remove('border-[#0058a3]'));
+    button.classList.add('border-[#0058a3]');
+    currentFeet = button.dataset.feet;
+    updateCabinetSystem();
+}
+
+const accessoryMap = {
+    'led': 'led',
+    'softClose': 'softClose',
+    'glassShelf': 'glassShelf',
+    'innerDrawer': 'innerDrawer'
+};
+
+function handleAccessorySelection(event) {
+    const checkbox = event.currentTarget;
+    // Find the corresponding accessory key based on checkbox name or another attribute if needed
+    // Assuming checkbox name matches the keys in accessoryMap for simplicity
+    const accessoryKey = checkbox.name; // Adjust if name attribute isn't set or suitable
+    if (accessoryMap[accessoryKey]) {
+        accessories[accessoryMap[accessoryKey]] = checkbox.checked;
+        updateCabinetSystem();
+    }
+}
+// --- END: Event Handlers for Options ---
+
 // Event Listeners
 window.addEventListener('DOMContentLoaded', () => {
     init();
 
-    // Farbe ändern
-    document.querySelectorAll('.color-swatch').forEach(button => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
-            button.classList.add('active');
-            currentMaterial = button.dataset.color;
-            updateCabinetSystem();
+    // --- Setup Desktop Listeners ---
+    // Select the desktop container explicitly
+    const desktopContainer = document.getElementById('settingsPanelDesktop');
+    if (desktopContainer) {
+        // Color
+        desktopContainer.querySelectorAll('.color-swatch').forEach(button => {
+            button.addEventListener('click', handleColorSelection);
         });
-    });
-
-    // Griffe ändern
-    document.querySelectorAll('[data-handle]').forEach(button => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('[data-handle]').forEach(b => b.classList.remove('border-[#0058a3]'));
-            button.classList.add('border-[#0058a3]');
-            currentHandle = button.dataset.handle;
-            updateCabinetSystem();
+        // Modules
+         desktopContainer.querySelectorAll('.module-card').forEach(card => {
+            card.addEventListener('click', handleModuleSelection);
         });
-    });
-
-    // Füße ändern
-    document.querySelectorAll('[data-feet]').forEach(button => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('[data-feet]').forEach(b => b.classList.remove('border-[#0058a3]'));
-            button.classList.add('border-[#0058a3]');
-            currentFeet = button.dataset.feet;
-            updateCabinetSystem();
+        // Handles
+        desktopContainer.querySelectorAll('[data-handle]').forEach(button => {
+            button.addEventListener('click', handleHandleSelection);
         });
-    });
-
-    // Zubehör ändern
-    const accessoryMap = {
-        'led': 'led',
-        'softClose': 'softClose',
-        'glassShelf': 'glassShelf',
-        'innerDrawer': 'innerDrawer'
-    };
-
-    document.querySelectorAll('input[type="checkbox"]').forEach((checkbox, index) => {
-        checkbox.addEventListener('change', () => {
-            const accessoryKey = Object.keys(accessoryMap)[index];
-            accessories[accessoryMap[accessoryKey]] = checkbox.checked;
-            updateCabinetSystem();
+        // Feet
+        desktopContainer.querySelectorAll('[data-feet]').forEach(button => {
+            button.addEventListener('click', handleFeetSelection);
         });
-    });
-
-    // Module hinzufügen
-    document.querySelectorAll('.module-card').forEach(card => {
-        card.addEventListener('click', () => {
-            const moduleType = card.dataset.type;
-            modules.push({ type: moduleType });
-            updateCabinetSystem();
-        });
-    });
-
-    // Maße ändern
-    ['width', 'height', 'depth'].forEach(id => {
-        const input = document.getElementById(id);
-        if (input) {
-            input.addEventListener('input', updateCabinetSystem);
+        // Accessories
+        // Assuming checkboxes are directly inside the list container found by data-setting
+        const accessoryList = desktopContainer.querySelector('[data-setting="accessories"] .accessory-selection-list');
+        if (accessoryList) {
+            accessoryList.querySelectorAll('input[type="checkbox"]').forEach((checkbox, index) => {
+                // Assign name based on order if needed for the handler
+                const accessoryKey = Object.keys(accessoryMap)[index]; 
+                checkbox.name = accessoryKey; // Ensure name is set for the handler
+                checkbox.addEventListener('change', handleAccessorySelection);
+            });
         }
-    });
-
-    // Raumgröße Modal
-    const modal = document.getElementById('roomSizeModal');
-    const roomSizeBtn = document.getElementById('roomSizeBtn');
-    const cancelBtn = document.getElementById('cancelRoomSize');
-    const applyBtn = document.getElementById('applyRoomSize');
-
-    if (roomSizeBtn) {
-        roomSizeBtn.addEventListener('click', () => {
-            modal.classList.add('active');
-            document.getElementById('roomWidth').value = roomWidth;
-            document.getElementById('roomDepth').value = roomDepth;
-            document.getElementById('roomHeight').value = roomHeight;
-        });
     }
 
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
-            modal.classList.remove('active');
-        });
+    // --- Setup Mobile Controls ---
+    setupMobileControls();
+
+    // --- START: Raumgröße Modal & Buttons ---
+    const roomSizeModal = document.getElementById('roomSizeModal');
+    const roomSizeBtn = document.getElementById('roomSizeBtn'); // Mobile Button
+    const roomSizeBtnDesktop = document.getElementById('roomSizeBtnDesktop'); // Desktop Button
+    const cancelRoomSizeBtn = document.getElementById('cancelRoomSize');
+    const applyRoomSizeBtn = document.getElementById('applyRoomSize');
+    const roomWidthInput = document.getElementById('roomWidth');
+    const roomDepthInput = document.getElementById('roomDepth');
+    const roomHeightInput = document.getElementById('roomHeight');
+
+    function openRoomSizeModal() {
+        roomWidthInput.value = roomWidth;
+        roomDepthInput.value = roomDepth;
+        roomHeightInput.value = roomHeight;
+        roomSizeModal.classList.add('active');
     }
 
-    if (applyBtn) {
-        applyBtn.addEventListener('click', () => {
-            roomWidth = parseFloat(document.getElementById('roomWidth').value);
-            roomDepth = parseFloat(document.getElementById('roomDepth').value);
-            roomHeight = parseFloat(document.getElementById('roomHeight').value);
-            createRoom();
-            modal.classList.remove('active');
+    function closeRoomSizeModal() {
+        roomSizeModal.classList.remove('active');
+    }
+    
+    // Event Listener for BOTH buttons
+    if (roomSizeBtn) roomSizeBtn.addEventListener('click', openRoomSizeModal);
+    if (roomSizeBtnDesktop) roomSizeBtnDesktop.addEventListener('click', openRoomSizeModal);
+    
+    if (cancelRoomSizeBtn) cancelRoomSizeBtn.addEventListener('click', closeRoomSizeModal);
+
+    if (applyRoomSizeBtn) {
+        applyRoomSizeBtn.addEventListener('click', () => {
+            roomWidth = parseFloat(roomWidthInput.value);
+            roomDepth = parseFloat(roomDepthInput.value);
+            roomHeight = parseFloat(roomHeightInput.value);
+            createRoom(); // Raum neu erstellen mit neuen Dimensionen
+            closeRoomSizeModal();
         });
     }
+    // --- END: Raumgröße Modal & Buttons ---
 
     // Responsive Design
     window.addEventListener('resize', () => {
@@ -656,4 +911,26 @@ window.addEventListener('DOMContentLoaded', () => {
         renderer.setSize(width, height);
         labelRenderer.setSize(width, height);
     });
-}); 
+});
+
+// Fenstergröße anpassen
+window.addEventListener('resize', () => onWindowResize(), false);
+
+function onWindowResize() {
+    const container = document.getElementById('preview');
+    // Check if container is visible and has dimensions
+    if (!container || container.clientWidth === 0 || container.clientHeight === 0) {
+        console.warn("Preview container not ready or not visible for resize.");
+        return; 
+    }
+    
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // console.log(`Resizing to: ${width} x ${height}`); // Uncomment for debugging
+
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+    labelRenderer.setSize(width, height);
+} 
