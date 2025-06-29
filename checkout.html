@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - Schranksystem Konfigurator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            background: #f8fafc;
+            min-height: 100vh;
+        }
+        .card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+        .step-indicator {
+            position: relative;
+        }
+        .step-indicator::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 100%;
+            width: 100px;
+            height: 2px;
+            background: #e5e7eb;
+            transform: translateY(-50%);
+        }
+        .step-indicator.active::after {
+            background: #0058a3;
+        }
+        .step-indicator:last-child::after {
+            display: none;
+        }
+
+        .input-group {
+            position: relative;
+        }
+        .input-group input:focus + label,
+        .input-group input:not(:placeholder-shown) + label,
+        .input-group textarea:focus + label,
+        .input-group textarea:not(:placeholder-shown) + label {
+            transform: translateY(-24px) scale(0.85);
+            color: #0058a3;
+        }
+        .input-group label {
+            position: absolute;
+            left: 12px;
+            top: 16px;
+            transition: all 0.2s ease;
+            pointer-events: none;
+            color: #6b7280;
+            background: white;
+            padding: 0 4px;
+        }
+        .order-item {
+            transition: all 0.3s ease;
+        }
+        .order-item:hover {
+            transform: translateX(5px);
+            background: rgba(0, 88, 163, 0.05);
+        }
+        .payment-card {
+            transition: all 0.2s ease;
+        }
+        .payment-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .payment-card.selected {
+            border-color: #0058a3;
+            background: rgba(0, 88, 163, 0.05);
+        }
+    </style>
+    <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <button onclick="history.back()" class="flex items-center text-gray-600 hover:text-gray-800 transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    <span class="hidden sm:inline">Zurück zum Konfigurator</span>
+                </button>
+                <h1 class="text-xl font-semibold text-gray-900">Checkout</h1>
+                <div class="w-20"></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Progress Steps -->
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+        <div class="card rounded-lg p-6 mb-8">
+            <div class="flex items-center justify-center space-x-8">
+                <div class="step-indicator active flex flex-col items-center">
+                    <div class="w-10 h-10 bg-[#0058a3] text-white rounded-full flex items-center justify-center mb-2">
+                        <i class="fas fa-shopping-cart text-sm"></i>
+                    </div>
+                    <span class="text-xs font-medium text-[#0058a3]">Warenkorb</span>
+                </div>
+                <div class="step-indicator flex flex-col items-center">
+                    <div class="w-10 h-10 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center mb-2">
+                        <i class="fas fa-user text-sm"></i>
+                    </div>
+                    <span class="text-xs font-medium text-gray-500">Kundendaten</span>
+                </div>
+                <div class="step-indicator flex flex-col items-center">
+                    <div class="w-10 h-10 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center mb-2">
+                        <i class="fas fa-credit-card text-sm"></i>
+                    </div>
+                    <span class="text-xs font-medium text-gray-500">Bezahlung</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
+        <div class="lg:grid lg:grid-cols-12 lg:gap-8">
+            <!-- Order Summary -->
+            <div class="lg:col-span-4 mb-8 lg:mb-0">
+                <div class="card rounded-lg p-6 sticky top-24">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+                        <i class="fas fa-receipt mr-3 text-[#0058a3]"></i>
+                        Bestellübersicht
+                    </h2>
+                    
+                    <div id="orderSummary" class="space-y-4 mb-6">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    
+                    <!-- Discount Code -->
+                    <div class="border-t pt-6 mb-6">
+                        <div class="flex gap-2">
+                            <input type="text" id="discountCode" placeholder="Rabattcode eingeben" 
+                                class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors">
+                            <button onclick="applyDiscount()" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                                <i class="fas fa-tag"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Total -->
+                    <div class="border-t pt-6">
+                        <div class="flex justify-between items-center text-lg mb-2">
+                            <span>Zwischensumme:</span>
+                            <span id="subtotal">€ 0</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm text-gray-600 mb-2">
+                            <span>Versandkosten:</span>
+                            <span>Kostenlos</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm text-gray-600 mb-4">
+                            <span>MwSt. (19%):</span>
+                            <span id="tax">€ 0</span>
+                        </div>
+                        <div class="flex justify-between items-center text-2xl font-bold text-[#0058a3] pt-4 border-t">
+                            <span>Gesamtpreis:</span>
+                            <span id="total">€ 0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Checkout Form -->
+            <div class="lg:col-span-8">
+                <!-- Customer Information -->
+                <div class="card rounded-lg p-6 mb-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+                        <i class="fas fa-user mr-3 text-[#0058a3]"></i>
+                        Kundendaten
+                    </h2>
+                    
+                    <form id="checkoutForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="input-group">
+                                <input type="text" id="firstName" name="firstName" required placeholder=" " 
+                                    class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                                <label for="firstName">Vorname *</label>
+                            </div>
+                            <div class="input-group">
+                                <input type="text" id="lastName" name="lastName" required placeholder=" " 
+                                    class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                                <label for="lastName">Nachname *</label>
+                            </div>
+                        </div>
+                        
+                        <div class="input-group">
+                            <input type="email" id="email" name="email" required placeholder=" " 
+                                class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                            <label for="email">E-Mail-Adresse *</label>
+                        </div>
+                        
+                        <div class="input-group">
+                            <input type="tel" id="phone" name="phone" placeholder=" " 
+                                class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                            <label for="phone">Telefonnummer</label>
+                        </div>
+                        
+                        <div class="input-group">
+                            <input type="text" id="address" name="address" required placeholder=" " 
+                                class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                            <label for="address">Straße und Hausnummer *</label>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="input-group">
+                                <input type="text" id="zipCode" name="zipCode" required placeholder=" " 
+                                    class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                                <label for="zipCode">PLZ *</label>
+                            </div>
+                            <div class="input-group md:col-span-2">
+                                <input type="text" id="city" name="city" required placeholder=" " 
+                                    class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                                <label for="city">Ort *</label>
+                            </div>
+                        </div>
+                        
+                        <div class="input-group">
+                            <textarea id="notes" name="notes" rows="3" placeholder=" " 
+                                class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white"></textarea>
+                            <label for="notes">Anmerkungen (optional)</label>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Payment Method -->
+                <div class="card rounded-lg p-6 mb-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+                        <i class="fas fa-credit-card mr-3 text-[#0058a3]"></i>
+                        Zahlungsmethode
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="payment-card p-4 border-2 border-gray-200 rounded-lg cursor-pointer" onclick="selectPayment('card')">
+                            <div class="text-center">
+                                <i class="fas fa-credit-card text-2xl text-[#0058a3] mb-2"></i>
+                                <div class="font-medium">Kreditkarte</div>
+                                <div class="text-sm text-gray-500">Visa, Mastercard</div>
+                            </div>
+                        </div>
+                        <div class="payment-card selected p-4 border-2 border-[#0058a3] rounded-lg cursor-pointer" onclick="selectPayment('paypal')">
+                            <div class="text-center">
+                                <i class="fab fa-paypal text-2xl text-[#0058a3] mb-2"></i>
+                                <div class="font-medium">PayPal</div>
+                                <div class="text-sm text-gray-500">Schnell & sicher</div>
+                            </div>
+                        </div>
+                        <div class="payment-card p-4 border-2 border-gray-200 rounded-lg cursor-pointer" onclick="selectPayment('transfer')">
+                            <div class="text-center">
+                                <i class="fas fa-university text-2xl text-[#0058a3] mb-2"></i>
+                                <div class="font-medium">Überweisung</div>
+                                <div class="text-sm text-gray-500">Vorkasse</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Card Details (hidden by default) -->
+                    <div id="cardDetails" class="hidden space-y-4">
+                        <div class="input-group">
+                            <input type="text" id="cardNumber" placeholder=" " 
+                                class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                            <label for="cardNumber">Kartennummer</label>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="input-group">
+                                <input type="text" id="expiryDate" placeholder=" " 
+                                    class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                                <label for="expiryDate">MM/JJ</label>
+                            </div>
+                            <div class="input-group">
+                                <input type="text" id="cvv" placeholder=" " 
+                                    class="w-full px-3 py-4 border border-gray-300 rounded-lg focus:border-[#0058a3] focus:ring-2 focus:ring-[#0058a3]/20 transition-colors bg-white">
+                                <label for="cvv">CVC</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Terms & Submit -->
+                <div class="card rounded-lg p-6">
+                    <div class="flex items-start space-x-3 mb-6">
+                        <input type="checkbox" id="terms" class="mt-1 w-5 h-5 text-[#0058a3] border-gray-300 rounded focus:ring-[#0058a3]">
+                        <label for="terms" class="text-sm text-gray-700">
+                            Ich akzeptiere die <a href="#" class="text-[#0058a3] hover:underline">Allgemeinen Geschäftsbedingungen</a> 
+                            und die <a href="#" class="text-[#0058a3] hover:underline">Datenschutzerklärung</a>.
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-start space-x-3 mb-8">
+                        <input type="checkbox" id="newsletter" class="mt-1 w-5 h-5 text-[#0058a3] border-gray-300 rounded focus:ring-[#0058a3]">
+                        <label for="newsletter" class="text-sm text-gray-700">
+                            Ich möchte den Newsletter erhalten und über neue Produkte informiert werden.
+                        </label>
+                    </div>
+                    
+                    <button onclick="submitOrder()" class="w-full bg-[#0058a3] text-white py-4 px-8 rounded-lg font-semibold text-lg hover:bg-[#004f93] transition-colors flex items-center justify-center">
+                        <i class="fas fa-lock mr-3"></i>
+                        Kostenpflichtig bestellen
+                        <span id="finalTotal" class="ml-3 bg-black/10 px-3 py-1 rounded">€ 0</span>
+                    </button>
+                    
+                    <div class="text-center mt-4 text-sm text-gray-500">
+                        <i class="fas fa-shield-alt mr-1"></i>
+                        SSL-verschlüsselt und sicher
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full text-center shadow-xl">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-check text-2xl text-green-600"></i>
+            </div>
+            <h3 class="text-xl font-semibold text-gray-900 mb-4">Bestellung erfolgreich!</h3>
+            <p class="text-gray-600 mb-6">
+                Vielen Dank für Ihre Bestellung. Sie erhalten in Kürze eine Bestätigungsmail mit allen Details.
+            </p>
+            <button onclick="window.location.href='index.html'" class="bg-[#0058a3] text-white px-6 py-3 rounded-lg hover:bg-[#004f93] transition-colors">
+                Neuen Schrank konfigurieren
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Load order data from localStorage or URL parameters
+        let orderData = {};
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadOrderData();
+            populateOrderSummary();
+            updateTotals();
+        });
+        
+        function loadOrderData() {
+            // Try to get data from localStorage first, fallback to demo data
+            const storedData = localStorage.getItem('configuratorOrder');
+            if (storedData) {
+                orderData = JSON.parse(storedData);
+            } else {
+                // Demo data for testing
+                orderData = {
+                    modules: [
+                        { type: 'base', name: 'Unterschrank', price: 399 },
+                        { type: 'hanging', name: 'Hängeschrank', price: 299 }
+                    ],
+                    material: { type: 'oak', name: 'Eiche', price: 200 },
+                    handles: { type: 'classic', name: 'Klassisch', price: 50 },
+                    feet: { type: 'metal', name: 'Metall', price: 40 },
+                    accessories: [
+                        { type: 'led', name: 'LED-Beleuchtung', price: 49 },
+                        { type: 'softClose', name: 'Soft-Close', price: 29 }
+                    ]
+                };
+            }
+        }
+        
+        function populateOrderSummary() {
+            const container = document.getElementById('orderSummary');
+            let html = '';
+            
+            // Modules
+            if (orderData.modules && orderData.modules.length > 0) {
+                orderData.modules.forEach(module => {
+                    html += `
+                        <div class="order-item flex justify-between items-center p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-cube text-[#0058a3] mr-3"></i>
+                                <span>${module.name}</span>
+                            </div>
+                            <span class="font-semibold">€ ${module.price}</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            // Material
+            if (orderData.material && orderData.material.price > 0) {
+                html += `
+                    <div class="order-item flex justify-between items-center p-3 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-palette text-[#0058a3] mr-3"></i>
+                            <span>Material: ${orderData.material.name}</span>
+                        </div>
+                        <span class="font-semibold">€ ${orderData.material.price}</span>
+                    </div>
+                `;
+            }
+            
+            // Handles
+            if (orderData.handles && orderData.handles.price > 0) {
+                html += `
+                    <div class="order-item flex justify-between items-center p-3 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-grip-lines text-[#0058a3] mr-3"></i>
+                            <span>Griffe: ${orderData.handles.name}</span>
+                        </div>
+                        <span class="font-semibold">€ ${orderData.handles.price}</span>
+                    </div>
+                `;
+            }
+            
+            // Feet
+            if (orderData.feet && orderData.feet.price > 0) {
+                html += `
+                    <div class="order-item flex justify-between items-center p-3 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-shoe-prints text-[#0058a3] mr-3"></i>
+                            <span>Füße: ${orderData.feet.name}</span>
+                        </div>
+                        <span class="font-semibold">€ ${orderData.feet.price}</span>
+                    </div>
+                `;
+            }
+            
+            // Accessories
+            if (orderData.accessories && orderData.accessories.length > 0) {
+                orderData.accessories.forEach(accessory => {
+                    html += `
+                        <div class="order-item flex justify-between items-center p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-plus-circle text-[#0058a3] mr-3"></i>
+                                <span>${accessory.name}</span>
+                            </div>
+                            <span class="font-semibold">€ ${accessory.price}</span>
+                        </div>
+                    `;
+                });
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function updateTotals() {
+            let subtotal = 0;
+            
+            // Calculate subtotal
+            if (orderData.modules) {
+                orderData.modules.forEach(module => subtotal += module.price);
+            }
+            if (orderData.material) {
+                subtotal += orderData.material.price;
+            }
+            if (orderData.handles) {
+                subtotal += orderData.handles.price;
+            }
+            if (orderData.feet) {
+                subtotal += orderData.feet.price;
+            }
+            if (orderData.accessories) {
+                orderData.accessories.forEach(accessory => subtotal += accessory.price);
+            }
+            
+            const tax = Math.round(subtotal * 0.19);
+            const total = subtotal + tax;
+            
+            document.getElementById('subtotal').textContent = `€ ${subtotal}`;
+            document.getElementById('tax').textContent = `€ ${tax}`;
+            document.getElementById('total').textContent = `€ ${total}`;
+            document.getElementById('finalTotal').textContent = `€ ${total}`;
+        }
+        
+        function selectPayment(method) {
+            document.querySelectorAll('.payment-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+            
+            // Show/hide card details
+            const cardDetails = document.getElementById('cardDetails');
+            if (method === 'card') {
+                cardDetails.classList.remove('hidden');
+            } else {
+                cardDetails.classList.add('hidden');
+            }
+        }
+        
+        function applyDiscount() {
+            const code = document.getElementById('discountCode').value.toUpperCase();
+            if (code === 'WELCOME10') {
+                alert('Rabattcode angewendet! 10% Rabatt.');
+                // Update totals with discount
+            } else if (code) {
+                alert('Ungültiger Rabattcode.');
+            }
+        }
+        
+        function submitOrder() {
+            const terms = document.getElementById('terms').checked;
+            if (!terms) {
+                alert('Bitte akzeptieren Sie die AGB.');
+                return;
+            }
+            
+            // Validate form
+            const form = document.getElementById('checkoutForm');
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+            
+            // Show success modal
+            document.getElementById('successModal').classList.remove('hidden');
+            
+            // In a real app, you would send the order to your backend here
+            console.log('Order submitted:', {
+                customer: new FormData(form),
+                order: orderData
+            });
+        }
+    </script>
+</body>
+</html> 

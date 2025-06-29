@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { 
             font-family: 'Inter', sans-serif;
@@ -135,9 +136,13 @@
             </button>
             <div class="text-right flex items-center">
                 <span class="text-lg lg:text-2xl font-bold mr-4">€ <span id="totalPrice">0</span></span>
-                <!-- Weiter Button (Desktop) -->
-                <button class="hidden lg:inline-block ml-4 bg-[#0058a3] text-white px-6 py-2 rounded hover:bg-[#004f93] transition-colors">
-                    Weiter
+                <!-- Checkout Button (Desktop) -->
+                <button id="checkoutBtn" class="hidden lg:inline-block ml-4 bg-[#0058a3] text-white px-6 py-2 rounded hover:bg-[#004f93] transition-colors">
+                    Checkout
+                </button>
+                <!-- Checkout Button (Mobile) -->
+                <button id="checkoutBtnMobile" class="lg:hidden ml-4 bg-[#0058a3] text-white px-4 py-2 rounded hover:bg-[#004f93] transition-colors text-sm">
+                    Checkout
                 </button>
             </div>
         </div>
@@ -156,14 +161,21 @@
         <div id="settingsPanelDesktop" class="hidden lg:block w-96 bg-white border-l border-gray-200 settings-panel p-6 lg:h-auto lg:max-h-screen overflow-y-auto">
             
             <!-- Toolbar Buttons (Desktop) -->
-            <div class="hidden lg:flex gap-4 mb-6 border-b pb-4">
-                 <button id="roomSizeBtnDesktop" class="bg-gray-100 text-gray-800 px-4 py-2 rounded hover:bg-gray-200 transition-colors flex items-center gap-2 text-sm">
+            <div class="hidden lg:flex flex-wrap gap-2 mb-6 border-b pb-4">
+                 <button id="roomSizeBtnDesktop" class="bg-gray-100 text-gray-800 px-3 py-2 rounded hover:bg-gray-200 transition-colors flex items-center gap-2 text-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
                     </svg>
-                    Raumgröße ändern
+                    <span class="hidden xl:inline">Raumgröße</span>
                 </button>
-                <!-- Add other desktop toolbar buttons here if needed -->
+                <button id="undoBtn" class="bg-gray-100 text-gray-800 px-3 py-2 rounded hover:bg-gray-200 transition-colors flex items-center gap-2 text-sm" title="Rückgängig (Ctrl+Z)">
+                    <i class="fas fa-undo w-4 h-4"></i>
+                    <span class="hidden lg:inline">Rückgängig</span>
+                </button>
+                <button id="redoBtn" class="bg-gray-100 text-gray-800 px-3 py-2 rounded hover:bg-gray-200 transition-colors flex items-center gap-2 text-sm" title="Wiederholen (Ctrl+Y)">
+                    <i class="fas fa-redo w-4 h-4"></i>
+                    <span class="hidden lg:inline">Wiederholen</span>
+                </button>
             </div>
             
             <!-- Scrollable content area -->
@@ -359,6 +371,46 @@
                 </button>
                 <button id="applyRoomSize" class="px-4 py-2 bg-[#0058a3] text-white rounded hover:bg-[#004f93]">
                     Übernehmen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div id="checkoutModal" class="room-size-modal">
+        <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-semibold">Bestellübersicht</h3>
+                <button id="closeCheckout" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="checkoutContent" class="mb-6">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+            
+            <div class="border-t pt-6">
+                <h4 class="font-semibold text-gray-800 mb-4">Kundendaten</h4>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" placeholder="Vorname" class="px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <input type="text" placeholder="Nachname" class="px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    </div>
+                    <input type="email" placeholder="E-Mail-Adresse" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input type="tel" placeholder="Telefonnummer" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <textarea placeholder="Anmerkungen (optional)" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-1 focus:ring-blue-500"></textarea>
+                </div>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row gap-3 mt-6">
+                <button id="cancelCheckout" class="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+                    Abbrechen
+                </button>
+                <button id="submitOrder" class="flex-1 px-4 py-2 bg-[#0058a3] text-white rounded-lg hover:bg-[#004f93] font-semibold">
+                    Bestellung abschicken
                 </button>
             </div>
         </div>

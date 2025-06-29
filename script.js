@@ -7,6 +7,10 @@ let currentFeet = 'standard';
 let modules = [];
 let dimensionLabels = [];
 
+// History for Undo/Redo functionality  
+let configHistory = [];
+let currentHistoryIndex = -1;
+
 // Raumgrößen
 let roomWidth = 4;
 let roomDepth = 4;
@@ -491,19 +495,65 @@ function getMaterial(type) {
 
 // Griff hinzufügen
 function addHandle(parent, type, offset = 0) {
-    const handleMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xffffff,
-        shininess: 30
-    });
+    let handleGeometry, handleMaterial;
     
-    // Einfacher, moderner Griff wie in den Bildern
-    const handleWidth = 0.15;
-    const handleHeight = 0.02;
-    const handleDepth = 0.02;
+    switch(type) {
+        case 'modern':
+            // Langer, schlanker Griff
+            handleGeometry = new THREE.BoxGeometry(0.15, 0.02, 0.02);
+            handleMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xcccccc,
+                shininess: 100
+            });
+            break;
+            
+        case 'classic':
+            // Runder Knopf
+            handleGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.02, 16);
+            handleMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xb8860b, // Gold
+                shininess: 80
+            });
+            break;
+            
+        case 'minimal':
+            // Dünne Linie
+            handleGeometry = new THREE.BoxGeometry(0.12, 0.005, 0.015);
+            handleMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x333333,
+                shininess: 50
+            });
+            break;
+            
+        case 'touch':
+            // Kein sichtbarer Griff - nur eine dezente Mulde
+            handleGeometry = new THREE.BoxGeometry(0.08, 0.03, 0.005);
+            handleMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xf0f0f0,
+                shininess: 10
+            });
+            break;
+            
+        default:
+            handleGeometry = new THREE.BoxGeometry(0.15, 0.02, 0.02);
+            handleMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0xcccccc,
+                shininess: 100
+            });
+    }
     
-    const handleGeometry = new THREE.BoxGeometry(handleWidth, handleHeight, handleDepth);
     const handle = new THREE.Mesh(handleGeometry, handleMaterial);
-    handle.position.set(offset, 0, 0.02);
+    
+    // Position anpassen je nach Typ
+    if (type === 'classic') {
+        handle.rotation.z = Math.PI / 2; // Knopf horizontal ausrichten
+        handle.position.set(offset + 0.2, 0, 0.025);
+    } else if (type === 'touch') {
+        handle.position.set(offset, 0, 0.005); // Mulde weniger hervortretend
+    } else {
+        handle.position.set(offset, 0, 0.02);
+    }
+    
     parent.add(handle);
 }
 
@@ -534,6 +584,7 @@ function calculateTotalPrice() {
     if (accessories.innerDrawer) total += PRICES.accessories.innerDrawer;
     
     document.getElementById('totalPrice').textContent = total.toFixed(2);
+    return total;
 }
 
 // Schranksystem aktualisieren
@@ -773,6 +824,8 @@ function handleColorSelection(event) {
     button.classList.add('active');
     currentMaterial = button.dataset.color;
     updateCabinetSystem();
+    updateCheckoutSummary();
+    saveState(); // Save state for undo/redo
 }
 
 function handleModuleSelection(event) {
@@ -780,24 +833,38 @@ function handleModuleSelection(event) {
     const moduleType = card.dataset.type;
     modules.push({ type: moduleType });
     updateCabinetSystem();
+    updateCheckoutSummary();
+    saveState(); // Save state for undo/redo
 }
 
 function handleHandleSelection(event) {
-     const button = event.currentTarget;
-     const container = button.closest('.handle-selection-grid');
-    container.querySelectorAll('[data-handle]').forEach(b => b.classList.remove('border-[#0058a3]'));
-    button.classList.add('border-[#0058a3]');
+    const button = event.currentTarget;
+    const container = button.closest('.handle-selection-grid');
+    // Remove active class from all handle buttons in this container
+    container.querySelectorAll('[data-handle]').forEach(b => {
+        b.classList.remove('border-[#0058a3]', 'bg-blue-50');
+    });
+    // Add active class to clicked button
+    button.classList.add('border-[#0058a3]', 'bg-blue-50');
     currentHandle = button.dataset.handle;
     updateCabinetSystem();
+    updateCheckoutSummary();
+    saveState(); // Save state for undo/redo
 }
 
 function handleFeetSelection(event) {
     const button = event.currentTarget;
     const container = button.closest('.feet-selection-grid');
-    container.querySelectorAll('[data-feet]').forEach(b => b.classList.remove('border-[#0058a3]'));
-    button.classList.add('border-[#0058a3]');
+    // Remove active class from all feet buttons in this container
+    container.querySelectorAll('[data-feet]').forEach(b => {
+        b.classList.remove('border-[#0058a3]', 'bg-blue-50');
+    });
+    // Add active class to clicked button
+    button.classList.add('border-[#0058a3]', 'bg-blue-50');
     currentFeet = button.dataset.feet;
     updateCabinetSystem();
+    updateCheckoutSummary();
+    saveState(); // Save state for undo/redo
 }
 
 const accessoryMap = {
@@ -809,19 +876,267 @@ const accessoryMap = {
 
 function handleAccessorySelection(event) {
     const checkbox = event.currentTarget;
-    // Find the corresponding accessory key based on checkbox name or another attribute if needed
-    // Assuming checkbox name matches the keys in accessoryMap for simplicity
-    const accessoryKey = checkbox.name; // Adjust if name attribute isn't set or suitable
+    const accessoryKey = checkbox.name;
     if (accessoryMap[accessoryKey]) {
         accessories[accessoryMap[accessoryKey]] = checkbox.checked;
         updateCabinetSystem();
+        updateCheckoutSummary();
+        saveState(); // Save state for undo/redo
     }
 }
+
+// Add checkout summary function
+function updateCheckoutSummary() {
+    updateTotalPrice();
+    
+    // Update checkout details if checkout modal is open
+    const checkoutModal = document.getElementById('checkoutModal');
+    if (checkoutModal && checkoutModal.classList.contains('active')) {
+        populateCheckoutDetails();
+    }
+}
+
+function updateTotalPrice() {
+    const total = calculateTotalPrice();
+    const totalPriceElement = document.getElementById('totalPrice');
+    if (totalPriceElement) {
+        totalPriceElement.textContent = total;
+    }
+}
+
+function populateCheckoutDetails() {
+    const checkoutContent = document.getElementById('checkoutContent');
+    if (!checkoutContent) return;
+    
+    let html = '<div class="space-y-4">';
+    
+    // Module list
+    if (modules.length > 0) {
+        html += '<div><h4 class="font-semibold text-gray-800 mb-2">Module:</h4>';
+        modules.forEach((module, index) => {
+            const price = PRICES.modules[module.type];
+            const name = module.type === 'hanging' ? 'Hängeschrank' : 
+                        module.type === 'base' ? 'Unterschrank' : 'Hochschrank';
+            html += `<div class="flex justify-between items-center py-1">
+                        <span>${name}</span>
+                        <span>€ ${price}</span>
+                     </div>`;
+        });
+        html += '</div>';
+    }
+    
+    // Material
+    if (currentMaterial && currentMaterial !== 'white') {
+        const materialName = getMaterialName(currentMaterial);
+        const price = PRICES.materials[currentMaterial];
+        html += `<div><h4 class="font-semibold text-gray-800 mb-2">Material:</h4>
+                 <div class="flex justify-between items-center py-1">
+                    <span>${materialName}</span>
+                    <span>€ ${price}</span>
+                 </div></div>`;
+    }
+    
+    // Handles
+    if (currentHandle && currentHandle !== 'modern') {
+        const handleName = getHandleName(currentHandle);
+        const price = PRICES.handles[currentHandle];
+        html += `<div><h4 class="font-semibold text-gray-800 mb-2">Griffe:</h4>
+                 <div class="flex justify-between items-center py-1">
+                    <span>${handleName}</span>
+                    <span>€ ${price}</span>
+                 </div></div>`;
+    }
+    
+    // Feet
+    if (currentFeet && currentFeet !== 'standard') {
+        const feetName = getFeetName(currentFeet);
+        const price = PRICES.feet[currentFeet];
+        html += `<div><h4 class="font-semibold text-gray-800 mb-2">Füße:</h4>
+                 <div class="flex justify-between items-center py-1">
+                    <span>${feetName}</span>
+                    <span>€ ${price}</span>
+                 </div></div>`;
+    }
+    
+    // Accessories
+    const selectedAccessories = Object.keys(accessories).filter(key => accessories[key]);
+    if (selectedAccessories.length > 0) {
+        html += '<div><h4 class="font-semibold text-gray-800 mb-2">Zubehör:</h4>';
+        selectedAccessories.forEach(accessory => {
+            const name = getAccessoryName(accessory);
+            const price = PRICES.accessories[accessory];
+            html += `<div class="flex justify-between items-center py-1">
+                        <span>${name}</span>
+                        <span>€ ${price}</span>
+                     </div>`;
+        });
+        html += '</div>';
+    }
+    
+    // Total
+    const total = calculateTotalPrice();
+    html += `<div class="border-t pt-4 mt-4">
+                <div class="flex justify-between items-center font-bold text-lg">
+                    <span>Gesamtpreis:</span>
+                    <span>€ ${total}</span>
+                </div>
+             </div>`;
+    
+    html += '</div>';
+    checkoutContent.innerHTML = html;
+}
+
+// Helper functions for names
+function getMaterialName(material) {
+    const names = {
+        'oak': 'Eiche',
+        'walnut': 'Nussbaum', 
+        'black': 'Schwarz',
+        'gray': 'Grau',
+        'birch': 'Birke',
+        'concrete': 'Beton',
+        'glass': 'Glas'
+    };
+    return names[material] || material;
+}
+
+function getHandleName(handle) {
+    const names = {
+        'classic': 'Klassisch',
+        'minimal': 'Minimal',
+        'touch': 'Touch'
+    };
+    return names[handle] || handle;
+}
+
+function getFeetName(feet) {
+    const names = {
+        'metal': 'Metall',
+        'wood': 'Holz',
+        'none': 'Ohne'
+    };
+    return names[feet] || feet;
+}
+
+function getAccessoryName(accessory) {
+    const names = {
+        'led': 'LED-Beleuchtung',
+        'softClose': 'Soft-Close',
+        'glassShelf': 'Glasböden',
+        'innerDrawer': 'Innenschubladen'
+    };
+    return names[accessory] || accessory;
+}
+
+function setInitialActiveStates() {
+    // Set active state for default white color
+    document.querySelectorAll('.color-swatch[data-color="white"]').forEach(swatch => {
+        swatch.classList.add('active');
+    });
+    
+    // Set active state for default modern handles
+    document.querySelectorAll('[data-handle="modern"]').forEach(handle => {
+        handle.classList.add('border-[#0058a3]', 'bg-blue-50');
+    });
+    
+    // Set active state for default standard feet
+    document.querySelectorAll('[data-feet="standard"]').forEach(feet => {
+        feet.classList.add('border-[#0058a3]', 'bg-blue-50');
+    });
+}
+
+// History management for Undo/Redo
+function saveState() {
+    const currentState = {
+        modules: [...modules],
+        currentMaterial,
+        currentHandle,
+        currentFeet,
+        accessories: {...accessories},
+        roomWidth,
+        roomDepth,
+        roomHeight,
+        timestamp: Date.now()
+    };
+    
+    // Remove any states after current index (when user made changes after undo)
+    configHistory = configHistory.slice(0, currentHistoryIndex + 1);
+    
+    // Add new state
+    configHistory.push(currentState);
+    currentHistoryIndex = configHistory.length - 1;
+    
+    // Limit history to 20 states
+    if (configHistory.length > 20) {
+        configHistory.shift();
+        currentHistoryIndex--;
+    }
+    
+    updateUndoRedoButtons();
+}
+
+function undo() {
+    if (currentHistoryIndex > 0) {
+        currentHistoryIndex--;
+        restoreState(configHistory[currentHistoryIndex]);
+        updateUndoRedoButtons();
+    }
+}
+
+function redo() {
+    if (currentHistoryIndex < configHistory.length - 1) {
+        currentHistoryIndex++;
+        restoreState(configHistory[currentHistoryIndex]);
+        updateUndoRedoButtons();
+    }
+}
+
+function restoreState(state) {
+    modules = [...state.modules];
+    currentMaterial = state.currentMaterial;
+    currentHandle = state.currentHandle;
+    currentFeet = state.currentFeet;
+    accessories = {...state.accessories};
+    roomWidth = state.roomWidth;
+    roomDepth = state.roomDepth;
+    roomHeight = state.roomHeight;
+    
+    // Update visual states
+    setInitialActiveStates();
+    updateCabinetSystem();
+    updateCheckoutSummary();
+    
+    // Update room if dimensions changed
+    createRoom();
+}
+
+function updateUndoRedoButtons() {
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    
+    if (undoBtn) {
+        undoBtn.disabled = currentHistoryIndex <= 0;
+        undoBtn.style.opacity = currentHistoryIndex <= 0 ? '0.5' : '1';
+    }
+    
+    if (redoBtn) {
+        redoBtn.disabled = currentHistoryIndex >= configHistory.length - 1;
+        redoBtn.style.opacity = currentHistoryIndex >= configHistory.length - 1 ? '0.5' : '1';
+    }
+}
+
 // --- END: Event Handlers for Options ---
 
 // Event Listeners
 window.addEventListener('DOMContentLoaded', () => {
     init();
+    
+    // Initialize default selections and price
+    setTimeout(() => {
+        updateCheckoutSummary();
+        // Set initial active states for default selections
+        setInitialActiveStates();
+    }, 100);
 
     // --- Setup Desktop Listeners ---
     // Select the desktop container explicitly
@@ -896,6 +1211,112 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
     // --- END: Raumgröße Modal & Buttons ---
+
+    // --- START: Checkout Modal & Buttons ---
+    const checkoutModal = document.getElementById('checkoutModal');
+    const checkoutBtn = document.getElementById('checkoutBtn');
+    const checkoutBtnMobile = document.getElementById('checkoutBtnMobile');
+    const closeCheckoutBtn = document.getElementById('closeCheckout');
+    const cancelCheckoutBtn = document.getElementById('cancelCheckout');
+    const submitOrderBtn = document.getElementById('submitOrder');
+
+    function openCheckoutModal() {
+        populateCheckoutDetails();
+        checkoutModal.classList.add('active');
+    }
+
+    function closeCheckoutModal() {
+        checkoutModal.classList.remove('active');
+    }
+
+    if (checkoutBtn) checkoutBtn.addEventListener('click', goToCheckout);
+    if (checkoutBtnMobile) checkoutBtnMobile.addEventListener('click', goToCheckout);
+    if (closeCheckoutBtn) closeCheckoutBtn.addEventListener('click', closeCheckoutModal);
+    if (cancelCheckoutBtn) cancelCheckoutBtn.addEventListener('click', closeCheckoutModal);
+    
+    if (submitOrderBtn) {
+        submitOrderBtn.addEventListener('click', () => {
+            // Here you would normally send the order to your backend
+            alert('Vielen Dank für Ihre Bestellung! Wir werden uns bald bei Ihnen melden.');
+            closeCheckoutModal();
+        });
+    }
+    
+    function goToCheckout() {
+        // Prepare order data
+        const orderData = {
+            modules: modules.map(module => ({
+                type: module.type,
+                name: module.type === 'hanging' ? 'Hängeschrank' : 
+                      module.type === 'base' ? 'Unterschrank' : 'Hochschrank',
+                price: PRICES.modules[module.type]
+            })),
+            material: currentMaterial !== 'white' ? {
+                type: currentMaterial,
+                name: getMaterialName(currentMaterial),
+                price: PRICES.materials[currentMaterial]
+            } : null,
+            handles: currentHandle !== 'modern' ? {
+                type: currentHandle,
+                name: getHandleName(currentHandle),
+                price: PRICES.handles[currentHandle]
+            } : null,
+            feet: currentFeet !== 'standard' ? {
+                type: currentFeet,
+                name: getFeetName(currentFeet),
+                price: PRICES.feet[currentFeet]
+            } : null,
+            accessories: Object.keys(accessories)
+                .filter(key => accessories[key])
+                .map(key => ({
+                    type: key,
+                    name: getAccessoryName(key),
+                    price: PRICES.accessories[key]
+                }))
+        };
+        
+        // Save to localStorage
+        localStorage.setItem('configuratorOrder', JSON.stringify(orderData));
+        
+        // Redirect to checkout page
+        window.location.href = 'checkout.html';
+    }
+
+    // Close modal when clicking outside
+    if (checkoutModal) {
+        checkoutModal.addEventListener('click', (e) => {
+            if (e.target === checkoutModal) {
+                closeCheckoutModal();
+            }
+        });
+    }
+    // --- END: Checkout Modal & Buttons ---
+
+    // --- START: Undo/Redo Event Listeners ---
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    
+    if (undoBtn) undoBtn.addEventListener('click', undo);
+    if (redoBtn) redoBtn.addEventListener('click', redo);
+    
+    // Keyboard shortcuts for Undo/Redo
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) { // Ctrl on Windows/Linux, Cmd on Mac
+            if (e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+            } else if ((e.key === 'y') || (e.key === 'z' && e.shiftKey)) {
+                e.preventDefault(); 
+                redo();
+            }
+        }
+    });
+    
+    // Save initial state
+    setTimeout(() => {
+        saveState();
+    }, 500);
+    // --- END: Undo/Redo Event Listeners ---
 
     // Responsive Design
     window.addEventListener('resize', () => {
